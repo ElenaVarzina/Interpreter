@@ -1,0 +1,5 @@
+function kek() {
+  undefined();
+}
+
+kek();
