@@ -11,3 +11,8 @@ To run the program from examples, run the following code in the terminal:
 
 To print the program from examples, run the following code in the terminal: 
 ```stack run print ./examples/<filename>```
+
+### Run tests
+
+To run tests, run the following code in the terminal:
+```stack test```
