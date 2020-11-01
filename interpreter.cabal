@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cc4187d51ddfa3acc2c134c5bdde0ce506b00495dccd23a6c43a640c4a7159ca
+-- hash: 66ace185be89c896eccc556c15544d6908cc5b463ec7ece5e0df24b38853567a
 
 name:           interpreter
 version:        0.1.0.0
@@ -68,10 +68,12 @@ test-suite interpreter-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      HUnit
+    , base >=4.7 && <5
     , containers
     , interpreter
     , megaparsec
     , mtl
     , parser-combinators
+    , silently
   default-language: Haskell2010

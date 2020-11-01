@@ -11,7 +11,7 @@ import Text.Read (readMaybe)
 import Data.Functor
 import Control.Monad
 import Control.Monad.State
-import Control.Monad.Except
+import Control.Exception
 
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -23,24 +23,39 @@ data Value = VNumber Double
            | VUndefined
            | VFunction Function String
 
-data ExceptionType = InvalidCall 
-                   | InvalidArgs
+data InterpreterExceptionType = InvalidCall 
+                              | InvalidArgs
 
-data ExceptionContext = InExpr Expr
+data InterpreterExceptionContext = InExpr Expr
                       | InFunction String
                       | InNativeCode String
                       | InTopLevel
 
-data Exception = Exception ExceptionType [ExceptionContext]
+data InterpreterException = InterpreterException InterpreterExceptionType [InterpreterExceptionContext]
+
+instance Show InterpreterException where
+  show (InterpreterException exc ctx) = (case exc of
+      InvalidCall -> "ERROR! Attempt to call uncallable value\n"
+      InvalidArgs -> "ERROR! Invalid number of arguments\n"
+    ) <> (unlines $ flip map ctx $ \case
+      InExpr expr       -> "  in expression " <> printExpr expr
+      InFunction name   -> "  in function " <> show name
+      InNativeCode name -> "  in function [native " <> show name <> "]"
+      InTopLevel        -> "<end of stack trace>"
+         )
+  
+
+instance Exception InterpreterException
 
 data InterpreterState = InterpreterState { vars :: Map Identifier Value
-                                         , ctxs :: [ExceptionContext]
+                                         , ctxs :: [InterpreterExceptionContext]
                                          }
 
 initialState :: InterpreterState
 initialState = InterpreterState mempty [InTopLevel]
 
-type Interpreter = StateT InterpreterState (ExceptT Exception IO)
+
+type Interpreter = StateT InterpreterState IO
 
 type Args = [Value]
 type Function = Args -> Interpreter Value
@@ -71,10 +86,10 @@ native name function = setVar name (VFunction fun repr)
           popContext
           return retval
 
-exception :: ExceptionType -> Interpreter a
+exception :: InterpreterExceptionType -> Interpreter a
 exception exc = do
   ctx <- gets ctxs
-  throwError $ Exception exc ctx
+  liftIO $ throwIO $ InterpreterException exc ctx
 
 invalidCall :: Interpreter a
 invalidCall = exception InvalidCall
@@ -183,7 +198,7 @@ unOp Minus [x]     = binOp Sub [VNumber 0, x]
 
 unOp _ _ = invalidArgs
 
-pushContext :: ExceptionContext -> Interpreter ()
+pushContext :: InterpreterExceptionContext -> Interpreter ()
 pushContext ctx = modify (\s -> s { ctxs = ctx:(ctxs s) })
 
 popContext :: Interpreter ()
@@ -251,18 +266,5 @@ evalStmt (SFunction name args body) =
         return retval
  in setVar name (VFunction fun repr) $> Nothing
 
-handleException :: Exception -> IO ()
-handleException (Exception exc ctx) = do
-  case exc of
-    InvalidCall -> putStrLn "ERROR! Attempt to call uncallable value"
-    InvalidArgs -> putStrLn "ERROR! Invalid number of arguments"
-  forM_ ctx $ \case
-    InExpr expr       -> putStrLn $ "  in expression " <> printExpr expr
-    InFunction name   -> putStrLn $ "  in function " <> show name
-    InNativeCode name -> putStrLn $ "  in function [native " <> show name <> "]"
-    InTopLevel        -> putStrLn $ "<end of stack trace>"
-
 interpret :: Block -> IO ()
-interpret prog = runExceptT (evalStateT (void $ prelude >> evalStmt (SBlock prog)) initialState) >>= \case
-  Left err -> handleException err
-  Right _ -> return ()
+interpret prog = void $ evalStateT (void $ prelude >> evalStmt (SBlock prog)) initialState
